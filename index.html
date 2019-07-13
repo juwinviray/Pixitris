@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset = "utf-8">
+        <title>Pixi-tris</title>
+    </head>
+        <script src="scripts/pixi.min.js"></script>
+    <body>
+        <!--css for fullscreen-->
+        <style>* {padding: 0; margin: 0}</style>
+        
+        <script type="text/javascript">
+
+            //// Tetris Classes ////
+            class Tetromino {
+
+                // contains shape indices of where blocks are in 4x4 array
+                shapes = [
+                    [],              // dummy shape to keep colors aligned
+                    [2,6,10,14],     // I
+                    [1,2,5,9],       // L
+                    [1,2,6,10],      // J
+                    [2,5,6,9],       // Z
+                    [1,5,6,10],      // S
+                    [5,6,9,10],      // O
+                    [2,5,6,10]       // T
+                ]
+
+                // contains the color of the block
+                block_color = [
+                    0x000000, // dummy color
+                    0x00FFFF, // I - Cyan
+                    0xFFA500, // L - Orange
+                    0x0000FF, // J - Blue
+                    0xFF0000, // Z - Red
+                    0x008000, // S - Green
+                    0xFFFF00, // O - Yellow
+                    0x800080  // T - Purple
+                ]
+
+
+                constructor(in_shape){
+                    this.shape = in_shape;
+                    this.body = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+                    this.setBody(in_shape);
+                    this.color = this.block_color[in_shape];
+                }
+
+                // for deep copies
+                copy(){
+                    var clone = Object.create( Object.getPrototypeOf( this ) ) 
+                    var i , keys = Object.getOwnPropertyNames( this ) ;
+
+                    for ( i = 0 ; i < keys.length ; i ++ )
+                    {
+                        // copy each property into the clone
+                        Object.defineProperty( clone , keys[ i ] ,
+                            Object.getOwnPropertyDescriptor( this , keys[ i ] )
+                        ) ;
+                    }
+
+                    return clone ;
+                }
+
+                // sets the initial shape into the body
+                // puts 1's where there are blocks into the body
+                setBody(index){
+                    let curr_shape = this.shapes[index];
+
+                    for( let i=0; i < 4; i++){
+                        //console.log(this.body)
+                        //console.log(curr_shape[i])
+                        this.body[curr_shape[i]] = 1;
+                    }
+                }
+
+                // calculates rotated index
+                rotate_index(px, py, r){
+                    switch(r % 4){
+                        case 0: return py * 4 + px;             // 0 degrees
+                        case 1: return 12 + py - (px * 4);      // 90 degrees
+                        case 2:	return 15 - (py * 4) - px;		// 180 degrees
+		                case 3:	return 3 - py + (px * 4);		// 270 degrees
+                        }
+                        return 0;
+                }
+
+                // rotates indices by 90
+                rotate(){
+
+                    let temp_body = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+                    
+
+                    for(let px = 0; px < 4; px++){
+                        for(let py = 0; py < 4; py++){
+                            let temp_ind = py * 4 + px;
+                            temp_body[this.rotate_index(px, py, 1)] = this.body[temp_ind];
+                        }
+                    }
+                    
+                    this.body = temp_body;
+                }
+
+                getShape(){
+                    return this.shape;
+                }
+            }
+
+            class Board {
+                // Game variables;
+                nFieldWidth = 10 + 2; // addition is for edges
+                nFieldHeight = 20 + 1; // addition is for bottom edge
+
+                constructor(){
+                    // constructs a 2d array playing field of 0 and sets left/right/bottom edges to 9
+                    this.pField = new Array (this.nFieldWidth * this.nFieldHeight);
+                    for(var x = 0; x < this.nFieldWidth; x++){
+                        for(var y = 0; y < this.nFieldHeight; y++){
+                            this.pField[y * this.nFieldWidth + x] = (x == 0 || x == this.nFieldWidth - 1 || y == this.nFieldHeight -1) ? 10: 0;
+                        }
+                    }
+                    this.vLines = new Array();
+                }
+
+                check_fit(tet_piece, c_rotation, posX, posY ){
+
+                    let temp_piece = tet_piece.copy();
+                    if(c_rotation != nCurrentRotation)
+                        temp_piece.rotate();
+
+                    for(let px = 0; px < 4; px++ ){
+                        for(let py = 0; py < 4; py++){
+
+                            // get rotated index
+                            let pi = py * 4 + px
+
+                            // get field index
+                            let fi = (posY + py) * this.nFieldWidth + (posX + px);
+
+                            // make sure piece is in bounds
+                            if (posX + px >= 0 && posX + px < this.nFieldWidth){
+                                if(posY + py >= 0 && posY + py < this.nFieldHeight){
+                                    // collision detection
+                                    if(temp_piece.body[pi] != 0 && this.pField[fi] != 0){
+                                        //console.log("posX", posX, "px", px, "posY",posY, "py",py, )
+                                        return false;
+                                    }
+                                }
+                            } 
+                        }
+                    }
+                    return true;                    
+                }
+            }
+            
+            //// Keyboard ////
+            function keyboard(value) {
+                let key = {};
+                key.value = value;
+                key.isDown = false;
+                key.isUp = true;
+                key.press = undefined;
+                key.release = undefined;
+                //The `downHandler`
+                key.downHandler = event => {
+                    if (event.key === key.value) {
+                    if (key.isUp && key.press) key.press();
+                    key.isDown = true;
+                    key.isUp = false;
+                    event.preventDefault();
+                    }
+                };
+
+                //The `upHandler`
+                key.upHandler = event => {
+                    if (event.key === key.value) {
+                    if (key.isDown && key.release) key.release();
+                    key.isDown = false;
+                    key.isUp = true;
+                    event.preventDefault();
+                    }
+                };
+
+                //Attach event listeners
+                const downListener = key.downHandler.bind(key);
+                const upListener = key.upHandler.bind(key);
+                
+                window.addEventListener(
+                    "keydown", downListener, false
+                );
+                window.addEventListener(
+                    "keyup", upListener, false
+                );
+                
+                // Detach event listeners
+                key.unsubscribe = () => {
+                    window.removeEventListener("keydown", downListener);
+                    window.removeEventListener("keyup", upListener);
+                };
+                
+                return key;
+            }
+
+            // generates an array of 1-7 in random order
+            function generate_bag(){
+                let bag = new Array();
+
+                // generate 1-7
+                for(let i = 1; i < 8;i++){
+                    bag.push(i);
+                }
+                
+                // shuffle array
+                for(let i = 0; i < 7;i++){
+                    let ind = Math.floor(Math.random() * 7);
+                    
+                    // 3 line swap
+                    let temp = bag[i];
+                    bag[i] = bag[ind];
+                    bag[ind] = temp;
+                }
+
+                return bag;
+            }
+
+            //// PIXI JS ////
+
+            // checks for WebGL or CanvasAPI
+            let type = "WebGL"
+            if(!PIXI.utils.isWebGLSupported()){
+                type = "canvas"
+            }
+
+            PIXI.utils.sayHello(type)
+
+            // Aliases
+            // shortcuts for PIXI
+            let Application = PIXI.Application,
+                Container = PIXI.Container,
+                loader = PIXI.loader,
+                resources = PIXI.loader.resources,
+                TextureCache = PIXI.utils.TextureCache,
+                Sprite = PIXI.Sprite,
+                Rectangle = PIXI.Rectangle,
+                Graphics = PIXI.Graphics,
+                Text = PIXI.Text,
+                TextStyle = PIXI.TextStyle;
+
+            // Create Pixi App
+            let app = new Application({
+                //width: 800,
+                //height: 600,
+                antialias: true,
+                transparent: false,
+                clearBeforeRender: true,
+                resolution: 1
+            });
+
+            // fullscreen
+            app.renderer.view.style.position = "absolute";
+            app.renderer.view.style.display = "block";
+            app.renderer.autoResize = true;
+            app.renderer.resize(window.innerWidth, window.innerHeight);
+
+            //// GAME LOGIC ////
+
+            // Game Variables
+            var game_bag = generate_bag();
+            var curr_piece = new Tetromino(game_bag.pop())
+            var gameSpeed = 40; // number of ticks before drop
+            var ticks = 0;
+
+            var my_board = new Board()
+
+            var nCurrentX = my_board.nFieldWidth/2 - 2;
+            var nCurrentY = 0;
+            var nCurrentRotation = 0;
+            
+            //// INPUT ////
+            //Capture the keyboard arrow keys
+            let left = keyboard("ArrowLeft"),
+                up = keyboard("ArrowUp"),
+                right = keyboard("ArrowRight"),
+                down = keyboard("ArrowDown"),
+                space_bar = keyboard(" ");
+
+            //Left arrow key `press` method
+            left.press = () => {
+                nCurrentX -= my_board.check_fit(curr_piece, nCurrentRotation, nCurrentX - 1, nCurrentY) ? 1 : 0;
+            };
+            
+            //Left arrow key `release` method
+            left.release = () => {
+    
+            };
+
+            //Right arrow key `press` method
+            right.press = () => {
+                nCurrentX += my_board.check_fit(curr_piece, nCurrentRotation, nCurrentX + 1, nCurrentY) ? 1 : 0;
+            };
+            
+            //Right arrow key `release` method
+            right.release = () => {
+    
+            };
+
+            //Down arrow key `press` method
+            down.press = () => {
+                nCurrentY += my_board.check_fit(curr_piece, nCurrentRotation, nCurrentX, nCurrentY + 1) ? 1 : 0;
+            };
+            
+            //Down arrow key `release` method
+            down.release = () => {
+    
+            };
+
+            //up arrow key `press` method
+            up.press = () => {
+                if(my_board.check_fit(curr_piece, nCurrentRotation + 1, nCurrentX, nCurrentY)){
+                    nCurrentRotation++;
+                    curr_piece.rotate();
+                }
+                //nCurrentRotation += my_board.check_fit(curr_piece, nCurrentRotation + 1, nCurrentX, nCurrentY) ? 1 : 0;
+                //curr_piece.rotate(nCurrentRotation);
+            };
+            
+            //up arrow key `release` method
+            up.release = () => {
+    
+            };
+
+            //space bar key `press` method
+            space_bar.press = () => {
+                pause = !pause;
+            };
+            
+            // space bar key `release` method
+            space_bar.release = () => {
+    
+            };
+
+
+            //// GAME STATE ////
+            //Set the game state
+            var gameOver = false;
+            var pause = false;
+
+            state = play;
+            
+            //Start the game loop
+            app.ticker.add(delta => gameLoop(delta));
+            
+            function gameLoop(delta){
+                
+                if(!pause){
+
+                
+                    // clear the stage
+                    app.stage.removeChildren();  
+                    
+                    //Update the current game state:
+                    
+                    
+                    if(!gameOver){
+                        // advance 
+                        ticks++;
+
+                        if(ticks >= gameSpeed){
+                            ticks = 0;
+                            if(my_board.check_fit(curr_piece, nCurrentRotation, nCurrentX, nCurrentY + 1))
+                                nCurrentY ++; //move down if possible
+                            else{
+                                // piece cant go down, lock it in place spawn new piece
+                                for (let px = 0; px < 4; px++){
+                                    for (let py = 0; py < 4; py++){
+                                        // if we hit an block we want to draw it onto the screen
+                                        let ind = py * 4 + px;
+                                        let pieceVal = curr_piece.body[ind];
+                                        console.log(curr_piece.shape)
+                                        if(pieceVal == 1){
+                                            my_board.pField[(nCurrentY + py) * my_board.nFieldWidth + (nCurrentX + px)] = curr_piece.shape;
+                                        }
+                                    }
+                                }
+
+                                // check if we made any lines
+                                for (let py = 0; py < 4; py++)
+                                    // checks within bounds of tetromino (4x4 square)
+                                    if (nCurrentY + py < my_board.nFieldHeight - 1)
+                                    {
+                                        let bLine = true;
+                                        // check the row within the field bounds for empty space
+                                        for (let px = 1; px < my_board.nFieldWidth - 1; px++)
+                                            bLine &= (my_board.pField[(nCurrentY + py) * my_board.nFieldWidth + px] != 0);
+
+                                        if (bLine)
+                                        {
+                                            // change the render of line which is 9
+                                            for (let px = 1; px < my_board.nFieldWidth - 1; px++)
+                                                my_board.pField[(nCurrentY + py) * my_board.nFieldWidth + px] = 9;
+                                            
+                                            console.log(my_board.pField)
+                                            // if line store it in vector
+                                            my_board.vLines.push(nCurrentY + py);
+                                        }
+                                }
+
+                                //generate new bag if empty
+                                if(game_bag.length == 0)
+                                    game_bag = generate_bag();
+
+                                // choose next piece, move cursor back to start
+                                //let new_pi = Math.floor(Math.random() * 7);
+                                curr_piece = new Tetromino(game_bag.pop());
+                                nCurrentRotation = 0;
+                                nCurrentX = (my_board.nFieldWidth / 2) - 2;
+                                nCurrentY = 0;
+
+                                // if piece does not fit, game over
+                                gameOver = !my_board.check_fit(curr_piece, nCurrentRotation, nCurrentX, nCurrentY);      
+                            }
+                        }
+                        state(delta);
+                    }
+                    else{
+                        // do game over logic here
+                        // clear the stage
+                        //state(delta);
+                        //app.stage.removeChildren();
+
+                        let style = new TextStyle({
+                            fontFamily: "Arial",
+                            fontSize: 36,
+                            fill: "white",
+                            stroke: '#ff3300',
+                            strokeThickness: 4,
+                            dropShadow: true,
+                            dropShadowColor: "#000000",
+                            dropShadowBlur: 4,
+                            dropShadowAngle: Math.PI / 6,
+                            dropShadowDistance: 6,
+                        });
+
+                        let message = new Text("GAME OVER!", style);
+                        app.stage.addChild(message);
+                    }
+                    
+                }
+            }
+
+            
+            function play(delta) {
+                let x_offset = (window.innerWidth / 2) - ((my_board.nFieldWidth / 2) * 32);
+                let y_offset = (window.innerHeight / 2- ((my_board.nFieldHeight / 2) * 32));
+               
+                // render
+                // draw piece
+                for (let px = 0; px < 4; px++){                
+					for (let py = 0; py < 4; py++){
+                        // if we hit an block we want to draw it onto the screen
+                        let ind = py * 4 + px;
+                        let pieceVal = curr_piece.body[ind];
+                        
+                        if(pieceVal == 1){
+                            let rectangle = new Graphics();
+                            rectangle.lineStyle(4, 0x000000, 1);
+                            rectangle.beginFill(curr_piece.color);
+                            rectangle.drawRoundedRect(0, 0, 32, 32, 5);
+                            rectangle.endFill();
+                            rectangle.x = (nCurrentX + px) * 32 + x_offset;
+                            rectangle.y = (nCurrentY + py) * 32 + y_offset;
+                            app.stage.addChild(rectangle);
+                        }
+                        /*
+                        if (tetromino[nCurrentPiece][Rotate(px, py, nCurrentRotation)] == L'X')
+							pField[(nCurrentY + py) * nFieldWidth + (nCurrentX + px)] = nCurrentPiece + 1;
+                        */
+
+                    }
+				}
+					
+                // draw field
+                for(let x = 0; x < my_board.nFieldWidth; x++){
+                    for(let y = 0; y < my_board.nFieldHeight; y++){
+                        let ind = y*my_board.nFieldWidth + x;
+                        let boardVal = my_board.pField[ind]; 
+                
+                        // edge
+                        if(boardVal == 10){
+                            //console.log("x", x, "y", y)
+                            let rectangle = new Graphics();
+                            rectangle.lineStyle(4, 0x202020, 1);
+                            rectangle.beginFill(0x0a0a0a);
+                            rectangle.drawRect(0, 0, 32, 32);
+                            rectangle.endFill();
+                            rectangle.x = x * 32 + x_offset;
+                            rectangle.y = y * 32 + y_offset;
+                            app.stage.addChild(rectangle);
+                        }
+
+                        // line (for erasing)
+                        else if(boardVal == 9){
+                            //console.log("x", x, "y", y)
+                            let rectangle = new Graphics();
+                            //rectangle.lineStyle(4, 0xFFFFFF, 1);
+                            rectangle.beginFill(0xFFFFFF);
+                            rectangle.drawRoundedRect(0, 0, 32, 32, 5);
+                            rectangle.endFill();
+                            rectangle.x = x * 32 + x_offset;
+                            rectangle.y = y * 32 + y_offset;
+                            app.stage.addChild(rectangle);
+                        }
+
+                        // block
+                        else if(boardVal != 0){
+                            //console.log("x", x, "y", y)
+                            let rectangle = new Graphics();
+                            rectangle.lineStyle(4, 0x000000, 1);
+                            rectangle.beginFill(curr_piece.block_color[boardVal]);
+                            rectangle.drawRoundedRect(0, 0, 32, 32, 5);
+                            rectangle.endFill();
+                            rectangle.x = x * 32 + x_offset;
+                            rectangle.y = y * 32 + y_offset;
+                            app.stage.addChild(rectangle);
+                        }
+    
+                    }    
+                }
+
+                //// ERASE LINES ////
+                if (!my_board.vLines.length == 0)
+                {
+                    // for each complete row 
+                    my_board.vLines.forEach(function erase(line){
+                        for(let px = 1; px < my_board.nFieldWidth - 1 ;px++){
+                            for (let py = line; py > 0; py--){
+                                // drop down the row above
+                                my_board.pField[py * my_board.nFieldWidth + px] = my_board.pField[(py - 1) * my_board.nFieldWidth + px];
+                            }
+                            my_board.pField[px] = 0;
+                        }
+                    });
+
+                    my_board.vLines.length = 0; 
+               
+                }
+                      
+            }
+        
+            // Add canvas to webpage
+            document.body.appendChild(app.view)
+
+        </script>
+    </body>
+</html>
