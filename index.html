@@ -223,6 +223,11 @@
                 return bag;
             }
 
+            //// Interaction ////
+            function onClick(){
+                location.reload();
+            }
+
             //// PIXI JS ////
 
             // checks for WebGL or CanvasAPI
@@ -439,7 +444,7 @@
                             gameover_bg.endFill();
                         
                         
-                        // text
+                        // Game Over text
                         let style = new TextStyle({
                             fontFamily: "Arial Black",
                             fontSize: 64,
@@ -457,14 +462,45 @@
                         message.x = 20;
                         message.y = 50;
 
+                        // Score
+                        let w_style = new TextStyle({
+                            fontFamily: "Arial Black",
+                            fontSize: 32,
+                            //fontStyle: "Black",
+                            fill: 0xFFFFFF,
+                            //stroke: '#ff3300',
+                            //strokeThickness: 4,
+                            //dropShadow: true,
+                            //dropShadowColor: "#000000",
+                            //dropShadowBlur: 4,
+                            //dropShadowAngle: Math.PI / 6,
+                            //dropShadowDistance: 6,
+                        });
+
+                        let score = new Text("Score: 000000", w_style);
+                        score.x = message.x;
+                        score.y = message.y + 100;
+
+                        // retry
+                        let retry = new Text ("Retry", w_style);
+                        retry.interactive = true;
+                        retry.buttonMode = true;
+                        retry.on('pointerdown', onClick);
+                        retry.x = score.x;
+                        retry.y = score.y + 50;
+
                         gameover_container.addChild(gameover_bg);
                         gameover_container.addChild(message);
+                        gameover_container.addChild(score);
+                        gameover_container.addChild(retry);
                         
                         // move position
                         gameover_container.x = (window.innerWidth / 2) - 250;// - ((my_board.nFieldWidth / 4) * 32);
                         gameover_container.y = (window.innerHeight / 2)- 250;// - ((my_board.nFieldHeight / 4) * 32);
 
                         app.stage.addChild(gameover_container);
+
+                        
                     }
                     
                 }
