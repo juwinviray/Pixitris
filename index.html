@@ -425,24 +425,46 @@
                     else{
                         // do game over logic here
                         // clear the stage
-                        //state(delta);
+                        state(delta);
                         //app.stage.removeChildren();
 
-                        let style = new TextStyle({
-                            fontFamily: "Arial",
-                            fontSize: 36,
-                            fill: "white",
-                            stroke: '#ff3300',
-                            strokeThickness: 4,
-                            dropShadow: true,
-                            dropShadowColor: "#000000",
-                            dropShadowBlur: 4,
-                            dropShadowAngle: Math.PI / 6,
-                            dropShadowDistance: 6,
-                        });
+                        // container
+                        let gameover_container = new Container();
 
+                        // background
+                        let gameover_bg = new Graphics();
+                            gameover_bg.lineStyle(4, 0xFF0000, 1);
+                            gameover_bg.beginFill(0x000000);
+                            gameover_bg.drawRect(0, 0, 500, 500);
+                            gameover_bg.endFill();
+                        
+                        
+                        // text
+                        let style = new TextStyle({
+                            fontFamily: "Arial Black",
+                            fontSize: 64,
+                            //fontStyle: "Black",
+                            fill: 0xFF0000,
+                            //stroke: '#ff3300',
+                            //strokeThickness: 4,
+                            //dropShadow: true,
+                            //dropShadowColor: "#000000",
+                            //dropShadowBlur: 4,
+                            //dropShadowAngle: Math.PI / 6,
+                            //dropShadowDistance: 6,
+                        });
                         let message = new Text("GAME OVER!", style);
-                        app.stage.addChild(message);
+                        message.x = 20;
+                        message.y = 50;
+
+                        gameover_container.addChild(gameover_bg);
+                        gameover_container.addChild(message);
+                        
+                        // move position
+                        gameover_container.x = (window.innerWidth / 2) - 250;// - ((my_board.nFieldWidth / 4) * 32);
+                        gameover_container.y = (window.innerHeight / 2)- 250;// - ((my_board.nFieldHeight / 4) * 32);
+
+                        app.stage.addChild(gameover_container);
                     }
                     
                 }
@@ -451,7 +473,7 @@
             
             function play(delta) {
                 let x_offset = (window.innerWidth / 2) - ((my_board.nFieldWidth / 2) * 32);
-                let y_offset = (window.innerHeight / 2- ((my_board.nFieldHeight / 2) * 32));
+                let y_offset = (window.innerHeight / 2) - ((my_board.nFieldHeight / 2) * 32);
                
                 // render
                 // draw piece
